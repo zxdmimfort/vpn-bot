@@ -1,5 +1,5 @@
 # Python-generated files
-__pycache__/
+**/__pycache__/
 *.py[oc]
 build/
 dist/
@@ -7,6 +7,10 @@ wheels/
 *.egg-info
 .idea
 database.db
+.ruff_cache
+.vscode
+
 # Virtual environments
+token.env
 .venv
 uv.lock

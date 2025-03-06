@@ -11,3 +11,8 @@ dependencies = [
     "dotenv>=0.9.9",
     "sqlalchemy[asyncio]>=2.0.38",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9.9",
+]

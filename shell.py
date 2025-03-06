@@ -1,7 +1,4 @@
-import IPython
-
 from config import get_engine, get_session
-from models import Base, User
 
 engine = get_engine()
 Session = get_session(engine)

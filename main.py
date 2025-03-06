@@ -6,21 +6,18 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     CallbackQuery,
-
-    FSInputFile
+    FSInputFile,
 )
 
 from dotenv import load_dotenv
 import os
 
-from select import select
+from sqlalchemy import select
 
 from config import get_engine, get_session
 from models import User
-from sqlalchemy.exc import (
-    SQLAlchemyError, NoResultFound
-)
-load_dotenv(dotenv_path='token.env')
+
+load_dotenv(dotenv_path="token.env")
 BOT_TOKEN = os.getenv("SECRET_KEY")
 
 engine = get_engine()
@@ -44,10 +41,7 @@ async def main():
 
     @router.message(Command("buttons"))
     async def send_buttons(message: Message):
-        await message.answer(
-            "Choose an action:",
-            reply_markup=get_keyboard()
-        )
+        await message.answer("Choose an action:", reply_markup=get_keyboard())
 
     @router.message(Command("info"))
     async def send_buttons(message: Message):
@@ -57,29 +51,20 @@ async def main():
 
     @router.message(Command("start"))
     async def init_dialog(message: Message):
-        from typing import NamedTuple
-
-
         stmt = select(User).where(
-            User.chat_id == message.chat.id,
-            User.username == message.chat.username
+            User.chat_id == message.chat.id, User.username == message.chat.username
         )
-
 
         result = session.execute(stmt).scalars().all()
         if not len(result):
-
             session.add(User(**UserArgs._asdict()))
 
     @router.message(Command("help"))
     async def send_help(message: Message):
-        await message.answer(
-            "Скачать nekoray, nekobox: https://matsuridayo.github.io/"
-        )
+        await message.answer("Скачать nekoray, nekobox: https://matsuridayo.github.io/")
 
         await message.answer_photo(
-            photo=FSInputFile(path='img.png'),
-            caption="добавить "
+            photo=FSInputFile(path="img.png"), caption="добавить "
         )
 
     @router.callback_query(F.data.startswith("cmd:"))
