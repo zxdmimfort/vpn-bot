@@ -1,4 +1,5 @@
 import asyncio
+from sqlalchemy import select
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import (
@@ -6,18 +7,19 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     CallbackQuery,
-    FSInputFile,
+
+    FSInputFile
 )
 
 from dotenv import load_dotenv
 import os
 
-from sqlalchemy import select
-
 from config import get_engine, get_session
 from models import User
-
-load_dotenv(dotenv_path="token.env")
+from sqlalchemy.exc import (
+    SQLAlchemyError, NoResultFound
+)
+load_dotenv(dotenv_path='token.env')
 BOT_TOKEN = os.getenv("SECRET_KEY")
 
 engine = get_engine()
@@ -41,7 +43,10 @@ async def main():
 
     @router.message(Command("buttons"))
     async def send_buttons(message: Message):
-        await message.answer("Choose an action:", reply_markup=get_keyboard())
+        await message.answer(
+            "Choose an action:",
+            reply_markup=get_keyboard()
+        )
 
     @router.message(Command("info"))
     async def send_buttons(message: Message):
@@ -51,29 +56,38 @@ async def main():
 
     @router.message(Command("start"))
     async def init_dialog(message: Message):
+        from typing import NamedTuple
+
         stmt = select(User).where(
-            User.chat_id == message.chat.id, User.username == message.chat.username
+            User.chat_id == message.chat.id and
+            User.username == message.chat.username
         )
 
         result = session.execute(stmt).scalars().all()
         if not len(result):
-            session.add(User(**UserArgs._asdict()))
-
+            await message.answer(
+                "Охайо!🖖"
+            ) 
+            session.add(User(chat_id=message.chat.id, username=message.chat.username, first_name=message.chat.first_name))
+        else: 
+            await message.answer(
+                "Вы уже прошли регистрацию!"
+            ) 
     @router.message(Command("help"))
     async def send_help(message: Message):
-        await message.answer("Скачать nekoray, nekobox: https://matsuridayo.github.io/")
+        await message.answer(
+            "Скачать nekoray, nekobox: https://matsuridayo.github.io/"
+        )
 
         await message.answer_photo(
-            photo=FSInputFile(path="img.png"), caption="добавить "
+            photo=FSInputFile(path='img.png'),
+            caption="добавить "
         )
 
     @router.callback_query(F.data.startswith("cmd:"))
     async def button_pressed(callback: CallbackQuery):
-        command = callback.data.split(":")[1]  # Extract command name
+        command = callback.data.split(":")[1]
 
-        # Simulate command execution
-        # if command == "start":
-        #     await start_cmd(callback.message)
         if command == "help":
             await send_help(callback.message)
 
