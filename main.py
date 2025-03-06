@@ -32,11 +32,13 @@ async def main():
     dp = Dispatcher()
     router = dp.include_router(Router())
 
-    # Create a numeric keyboard
-    def get_keyboard():
+    admins = ["aoi_dev", "mimfort"]
+    def get_keyboard(username, admins):
         buttons = [
             [
+                InlineKeyboardButton(text=str("регистрация"), callback_data=str("cmd:start")),
                 InlineKeyboardButton(text=str("помощь"), callback_data=str("cmd:help")),
+                InlineKeyboardButton(text=str("Ви админ!"), callback_data=str("cmd:admin")) if username in admins else InlineKeyboardButton(text=str("Ви не админ"), callback_data=str("cmd:not_admin"))
             ]
         ]
         return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -45,14 +47,14 @@ async def main():
     async def send_buttons(message: Message):
         await message.answer(
             "Choose an action:",
-            reply_markup=get_keyboard()
+            reply_markup=get_keyboard(message.chat.username, admins)
         )
 
-    @router.message(Command("info"))
-    async def send_buttons(message: Message):
-        print(dir(message))
-        print(message.__dict__)
-        print(message.__repr__())
+    # @router.message(Command("info"))
+    # async def send_info(message: Message):
+    #     print(dir(message))
+    #     print(message.__dict__)
+    #     print(message.__repr__())
 
     @router.message(Command("start"))
     async def init_dialog(message: Message):
@@ -65,13 +67,14 @@ async def main():
 
         result = session.execute(stmt).scalars().all()
         if not len(result):
-            await message.answer(
-                "Охайо!🖖"
-            ) 
             session.add(User(chat_id=message.chat.id, username=message.chat.username, first_name=message.chat.first_name))
+            session.commit()
+            await message.answer(
+                f"Охайо!🖖 {message.chat.username}"
+            ) 
         else: 
             await message.answer(
-                "Вы уже прошли регистрацию!"
+                f"Вы уже прошли регистрацию!"
             ) 
     @router.message(Command("help"))
     async def send_help(message: Message):
@@ -89,15 +92,13 @@ async def main():
         command = callback.data.split(":")[1]
 
         if command == "help":
-            await send_help(callback.message)
+            await send_help(callback.message)¤
 
-        await callback.messsage.answer(f"Triggered /{command}")
+        await callback.message.answer(f"Triggered /{command}")
 
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except Exception:
-        session.close()
+    asyncio.run(main())
+
