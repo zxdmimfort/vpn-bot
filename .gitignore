@@ -8,9 +8,9 @@ wheels/
 .idea
 database.db
 .ruff_cache
+.mypy_cache
 .vscode
 
 # Virtual environments
 token.env
 .venv
-uv.lock
