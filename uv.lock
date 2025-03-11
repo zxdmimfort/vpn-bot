@@ -658,6 +658,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "alembic" },
     { name = "dotenv" },
+    { name = "pydantic" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
@@ -674,6 +675,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "alembic", specifier = ">=1.15.1" },
     { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "pydantic", specifier = ">=2.10.6" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.38" },
 ]
 

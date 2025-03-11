@@ -1,4 +1,5 @@
 import asyncio
+import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from aiogram import Bot, Dispatcher, F, Router
@@ -8,7 +9,8 @@ from typing import Callable, Awaitable
 import os
 from dotenv import load_dotenv
 
-from config import get_engine, get_session
+from config import BASE_URL, VPN_PASSWORD, VPN_USERNAME, get_engine, get_session
+from login_client import APIClient
 from models import User
 from menu_markups import get_user_actions_markup, get_admin_actions_markup
 
@@ -21,6 +23,7 @@ admins: tuple[str, ...] = ("aoi_dev", "mimfort")
 
 
 async def main(session: Session) -> None:
+    api_client = APIClient(BASE_URL, VPN_USERNAME, VPN_PASSWORD)
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
     router = dp.include_router(Router())
@@ -71,6 +74,22 @@ async def main(session: Session) -> None:
         else:
             await message.answer("Вы уже прошли регистрацию!")
 
+    @router.message(Command("addcon"))
+    async def add_connection(message: Message):
+        if not is_user_registered(message):
+            await message.answer(
+                "Для начала вам нужно зарегестрироваться. Нажмите на кнопку 'Регистрация'"
+            )
+            return
+
+        response = await api_client.add_connection(2, message.chat.username)
+        await message.answer(json.dumps(response))
+
+    @router.message(Command("conlist"))
+    async def get_connections(message: Message):
+        response = await api_client.get_all_clients_of_inbound(2)
+        await message.answer(json.dumps(response))
+
     @router.message(Command("settingup"))
     async def send_setting_up_vpn_connection(message: Message) -> None:
         await message.answer("Скачать nekoray, nekobox: https://matsuridayo.github.io/")
@@ -88,6 +107,8 @@ async def main(session: Session) -> None:
     register_callback("register", lambda q: send_register(q.message))
     register_callback("settingup", lambda q: send_setting_up_vpn_connection(q.message))
     register_callback("adminmarkup", lambda q: send_admin_actions(q.message))
+    register_callback("addcon", lambda q: add_connection(q.message))
+    register_callback("conlist", lambda q: get_connections(q.message))
 
     await dp.start_polling(bot)
 
@@ -96,4 +117,5 @@ if __name__ == "__main__":
     engine = get_engine()
     SessionLocal = get_session(engine)
     session = SessionLocal()
+    print("Starting bot...")
     asyncio.run(main(session))
