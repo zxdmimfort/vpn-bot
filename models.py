@@ -26,6 +26,7 @@ class Connection(Base):
     inbound = Column(Integer(), nullable=False)
     email = Column(String(100), nullable=False)
     connection_url = Column(String(100), nullable=False)
+    host = Column(String(100), nullable=False)
     # Foreign key to link Connection with User.
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
