@@ -5,6 +5,7 @@ import aiohttp
 import random
 import string
 
+from db.config import BASE_URL, DEFAULT_INBOUND, VPN_PASSWORD, VPN_USERNAME
 from schemas import Response, SClient, SInbound
 
 
@@ -134,3 +135,7 @@ class APIClient:
 
     async def close(self) -> None:
         await self.session.close()
+
+
+async def get_async_client():
+    return APIClient(BASE_URL, VPN_USERNAME, VPN_PASSWORD, int(DEFAULT_INBOUND))

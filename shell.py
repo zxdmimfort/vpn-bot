@@ -1,18 +1,28 @@
-from config import get_engine, get_session
+from IPython.terminal.embed import InteractiveShellEmbed
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-engine = get_engine()
-Session = get_session(engine)
+from db.config import get_session_maker
+from db.models import Base, Connection, User
 
-# Определяем переменные, доступные в сессии шелла
-# locals_dict = globals().copy()
-#
-# locals_dict.update(
-#     {
-#         "engine": engine,
-#         "Session": Session,
-#         "Base": Base,
-#         "User": User
-#     }
-# )
 
-# IPython.start_ipython(argv=[], user_ns=locals_dict)
+def main() -> None:
+    # Определяем переменные, доступные в сессии шелла
+    locals_dict = globals().copy()
+    session_maker = get_session_maker()
+    session: AsyncSession = session_maker()
+    locals_dict.update(
+        {
+            "session": session,
+            "Base": Base,
+            "User": User,
+            "Connection": Connection,
+            "select": select,
+        }
+    )
+    shell = InteractiveShellEmbed()
+    shell(header="Shell session", user_ns=locals_dict)
+
+
+if __name__ == "__main__":
+    main()
