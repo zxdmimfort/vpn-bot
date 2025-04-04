@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -28,7 +29,9 @@ class Connection(Base):
     inbound: Mapped[int] = mapped_column(nullable=False)
     email: Mapped[str] = mapped_column(String(100), nullable=False)
     connection_url: Mapped[str] = mapped_column(String(100), nullable=False)
-    host: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    expired_at: Mapped[datetime] = mapped_column(nullable=False)
+    host: Mapped[str] = mapped_column(String(100), default="scvnotready.online")
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
