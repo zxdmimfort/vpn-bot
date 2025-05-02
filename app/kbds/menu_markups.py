@@ -5,15 +5,18 @@ from typing import Sequence, Tuple
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from db.models import Connection
+from app.db.models import Connection, User
 
 
 class UserAction(str, Enum):
     register = "register"
+    op = "op"
     settingup = "settingup"
-    adminmarkup = "adminmarkup"
     addcon = "addcon"
     conlist = "conlist"
+    adminmarkup = "adminmarkup"
+    viewcon = "viewcon"
+    deletecon = "deletecon"
 
 
 class UserActionData(CallbackData, prefix="user"):  # type: ignore
@@ -25,7 +28,8 @@ class UserActionData(CallbackData, prefix="user"):  # type: ignore
     Attributes:
         action (Action): The type of action to be performed.
         chat_id (int): The ID of the chat where the action is taking place.
-        user_id (int | None): The ID of the target user, if applicable. # type: ignore
+        user_id (int | None): The ID of the target user, if applicable.
+        connection_id (int | None): The ID of the target connection, if applicable.
     """
 
     action: UserAction
@@ -39,6 +43,7 @@ def get_user_actions_markup(
     admins: Tuple[str, ...],
     chat_id: int,
     user_id: int | None,
+    is_admin: bool = False,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if user_id is None:
@@ -71,9 +76,16 @@ def get_user_actions_markup(
                 ).pack(),
             ),
         )
-    if username in admins:
+    if username in admins or is_admin:
         builder.add(
-            InlineKeyboardButton(text=str("Админка"), callback_data="adminmarkup")
+            InlineKeyboardButton(
+                text=str("Админка"),
+                callback_data=UserActionData(
+                    action=UserAction.adminmarkup,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                ).pack(),
+            )
         )
     builder.adjust(2)
     return builder.as_markup()
@@ -89,8 +101,8 @@ def get_my_connections_markup(
         builder.add(
             InlineKeyboardButton(
                 text=f"{i}) - {connection.email}",
-                callback_data=AdminActionData(
-                    action=AdminAction.requests,
+                callback_data=UserActionData(
+                    action=UserAction.viewcon,
                     chat_id=chat_id,
                     user_id=user_id,
                     connection_id=connection.id,
@@ -101,12 +113,44 @@ def get_my_connections_markup(
     return builder.as_markup()
 
 
+def get_view_connection_markup(
+    chat_id: int,
+    user_id: int,
+    connection_id: int,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Удалить подключение"),
+            callback_data=UserActionData(
+                action=UserAction.deletecon,
+                chat_id=chat_id,
+                user_id=user_id,
+                connection_id=connection_id,
+            ).pack(),
+        )
+    )
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Назад"),
+            callback_data=UserActionData(
+                action=UserAction.conlist, chat_id=chat_id, user_id=user_id
+            ).pack(),
+        )
+    )
+    builder.adjust(2)
+    return builder.as_markup()
+
+
 class AdminAction(str, Enum):
     """An enumeration of admin actions for the bot's menu system."""
 
     userlist = "userlist"
+    userconn = "userconn"
     requests = "requests"
-    userstat = "userstat"
+    connstat = "connstat"
+    opuser = "opuser"
+    deleteuser = "deleteuser"
 
 
 class AdminActionData(CallbackData, prefix="admin"):  # type: ignore
@@ -118,12 +162,13 @@ class AdminActionData(CallbackData, prefix="admin"):  # type: ignore
     Attributes:
         action (AdminAction): The type of action to be performed.
         chat_id (int): The ID of the chat where the action is taking place.
-        user_id (int | None): The ID of the target user, if applicable. # type: ignore
+        user_id (int): The ID of the target user.
     """
 
     action: AdminAction
     chat_id: int
     user_id: int
+    connection_id: int | None = None
 
 
 def get_admin_actions_markup(
@@ -131,6 +176,7 @@ def get_admin_actions_markup(
     user_id: int,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+
     builder.add(
         InlineKeyboardButton(
             text=str("Пользователи"),
@@ -142,6 +188,90 @@ def get_admin_actions_markup(
             text=str("Запросы"),
             callback_data=AdminActionData(
                 action=AdminAction.requests, chat_id=chat_id, user_id=user_id
+            ).pack(),
+        ),
+    )
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_admin_userlist_markup(
+    chat_id: int,
+    user_id: int,
+    users: list[User],
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for i, user in enumerate(users, 1):
+        builder.add(
+            InlineKeyboardButton(
+                text=f"{user.username}",
+                callback_data=AdminActionData(
+                    action=AdminAction.userconn,
+                    chat_id=chat_id,
+                    user_id=user.id,
+                ).pack(),
+            )
+        )
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Назад"),
+            callback_data=UserActionData(
+                action=UserAction.adminmarkup, chat_id=chat_id, user_id=user_id
+            ).pack(),
+        )
+    )
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_admin_user_connections_markup(
+    chat_id: int,
+    user_id: int,
+    connections: list[Connection],
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for i, connection in enumerate(connections, 1):
+        builder.add(
+            InlineKeyboardButton(
+                text=f"{connection.email}",
+                callback_data=AdminActionData(
+                    action=AdminAction.connstat,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    connection_id=connection.id,
+                ).pack(),
+            )
+        )
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Назад"),
+            callback_data=AdminActionData(
+                action=AdminAction.userlist, chat_id=chat_id, user_id=user_id
+            ).pack(),
+        )
+    )
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_admin_user_actions_markup(
+    chat_id: int,
+    user_id: int,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Выдать админа пользователю"),
+            callback_data=AdminActionData(
+                action=AdminAction.userlist, chat_id=chat_id, user_id=user_id
+            ).pack(),
+        ),
+    )
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Назад"),
+            callback_data=AdminActionData(
+                action=AdminAction.userlist, chat_id=chat_id, user_id=user_id
             ).pack(),
         ),
     )

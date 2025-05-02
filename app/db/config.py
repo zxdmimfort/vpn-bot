@@ -35,5 +35,5 @@ load_dotenv(dotenv_path="token.env")
 
 VPN_USERNAME: str = os.getenv("VPN_USERNAME") or ""
 VPN_PASSWORD: str = os.getenv("VPN_PASSWORD") or ""
-DEFAULT_INBOUND: str = os.getenv("DEFAULT_INBOUND") or "2"
+DEFAULT_INBOUND: str = os.getenv("DEFAULT_INBOUND") or "1"
 BASE_URL: str = os.getenv("BASE_URL") or ""

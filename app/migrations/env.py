@@ -1,10 +1,15 @@
 from logging.config import fileConfig
+import logging
+from app.dependencies.logging_settings import logging_config
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-import db.models as models
+import app.db.models as models
+
+# Apply custom logging configuration
+logging.config.dictConfig(logging_config)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

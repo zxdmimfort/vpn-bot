@@ -2,8 +2,9 @@ from IPython.terminal.embed import InteractiveShellEmbed
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.config import get_session_maker
-from db.models import Base, Connection, User
+from app.login_client import get_async_client
+from app.db.config import get_session_maker
+from app.db.models import Base, Connection, User
 
 
 def main() -> None:
@@ -18,8 +19,10 @@ def main() -> None:
             "User": User,
             "Connection": Connection,
             "select": select,
+            "api": get_async_client(),
         }
     )
+    print("Welcome to the interactive shell!")
     shell = InteractiveShellEmbed()
     shell(header="Shell session", user_ns=locals_dict)
 

@@ -13,7 +13,7 @@ class SClient(BaseModel):
     limitIp: int
     reset: int
     subId: str
-    tgId: str
+    tgId: int | str
     totalGB: int
 
 
@@ -73,6 +73,18 @@ class Allocate(BaseModel):
     concurrency: int
 
 
+class ClientStats(BaseModel):
+    id: int
+    inboundId: int
+    enable: bool
+    email: str
+    up: int
+    down: int
+    expiryTime: int
+    total: int
+    reset: int
+
+
 class SInbound(BaseModel):
     id: int
     up: int
@@ -81,7 +93,7 @@ class SInbound(BaseModel):
     remark: str
     enable: bool
     expiryTime: int
-    clientStats: Any
+    clientStats: list[ClientStats]
     listen: str
     port: int
     protocol: str
@@ -120,7 +132,7 @@ class SInbound(BaseModel):
 class Response(BaseModel):
     success: bool
     msg: str
-    obj: SInbound | None
+    obj: list[SInbound]
 
 
 class Connection(BaseModel):

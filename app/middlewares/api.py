@@ -1,6 +1,6 @@
 from typing import Any, Awaitable, Callable
 from aiogram.types import TelegramObject
-from login_client import APIClient
+from app.login_client import APIClient
 
 
 class ApiClientMiddleware:
