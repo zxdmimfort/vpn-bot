@@ -17,6 +17,7 @@ class UserAction(str, Enum):
     adminmarkup = "adminmarkup"
     viewcon = "viewcon"
     deletecon = "deletecon"
+    startbutton = "startbutton"
 
 
 class UserActionData(CallbackData, prefix="user"):  # type: ignore
@@ -30,12 +31,16 @@ class UserActionData(CallbackData, prefix="user"):  # type: ignore
         chat_id (int): The ID of the chat where the action is taking place.
         user_id (int | None): The ID of the target user, if applicable.
         connection_id (int | None): The ID of the target connection, if applicable.
+        absolute_delete (bool): Flag to indicate if the connection should be deleted completely from database.
+        back_string (UserAction | None): The action to return to after the current action is completed.
     """
 
     action: UserAction
     chat_id: int
     user_id: int | None = None
     connection_id: int | None = None
+    absolute_delete: bool = False
+    back_string: UserAction | None = None
 
 
 def get_user_actions_markup(
@@ -44,14 +49,19 @@ def get_user_actions_markup(
     chat_id: int,
     user_id: int | None,
     is_admin: bool = False,
+    back_string: UserAction | None = None,
 ) -> InlineKeyboardMarkup:
+    """Buttons for startbutton"""
     builder = InlineKeyboardBuilder()
     if user_id is None:
         builder.add(
             InlineKeyboardButton(
                 text=str("Регистрация"),
                 callback_data=UserActionData(
-                    action=UserAction.register, chat_id=chat_id, user_id=user_id
+                    action=UserAction.register,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    back_string=UserAction.startbutton,
                 ).pack(),
             )
         )
@@ -60,19 +70,28 @@ def get_user_actions_markup(
             InlineKeyboardButton(
                 text=str("Список моих подключений"),
                 callback_data=UserActionData(
-                    action=UserAction.conlist, chat_id=chat_id, user_id=user_id
+                    action=UserAction.conlist,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    back_string=UserAction.startbutton,
                 ).pack(),
             ),
             InlineKeyboardButton(
                 text=str("Добавить новое подключение"),
                 callback_data=UserActionData(
-                    action=UserAction.addcon, chat_id=chat_id, user_id=user_id
+                    action=UserAction.addcon,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    back_string=UserAction.startbutton,
                 ).pack(),
             ),
             InlineKeyboardButton(
                 text=str("Установка подключения"),
                 callback_data=UserActionData(
-                    action=UserAction.settingup, chat_id=chat_id, user_id=user_id
+                    action=UserAction.settingup,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    back_string=UserAction.startbutton,
                 ).pack(),
             ),
         )
@@ -84,9 +103,11 @@ def get_user_actions_markup(
                     action=UserAction.adminmarkup,
                     chat_id=chat_id,
                     user_id=user_id,
+                    back_string=UserAction.startbutton,
                 ).pack(),
             )
         )
+
     builder.adjust(2)
     return builder.as_markup()
 
@@ -95,20 +116,32 @@ def get_my_connections_markup(
     chat_id: int,
     user_id: int,
     connections: Sequence[Connection],
+    back_string: UserAction,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for i, connection in enumerate(connections, 1):
         builder.add(
             InlineKeyboardButton(
-                text=f"{i}) - {connection.email}",
+                text=f"{'❌' if not connection.exists_in_api else '✅'} {connection.email}",
                 callback_data=UserActionData(
                     action=UserAction.viewcon,
                     chat_id=chat_id,
                     user_id=user_id,
                     connection_id=connection.id,
+                    back_string=UserAction.conlist,
                 ).pack(),
             )
         )
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Назад"),
+            callback_data=UserActionData(
+                action=back_string,
+                chat_id=chat_id,
+                user_id=user_id,
+            ).pack(),
+        )
+    )
     builder.adjust(2)
     return builder.as_markup()
 
@@ -117,6 +150,8 @@ def get_view_connection_markup(
     chat_id: int,
     user_id: int,
     connection_id: int,
+    back_string: UserAction,
+    is_admin: bool = False,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.add(
@@ -127,14 +162,29 @@ def get_view_connection_markup(
                 chat_id=chat_id,
                 user_id=user_id,
                 connection_id=connection_id,
+                back_string=UserAction.conlist,
             ).pack(),
         )
     )
+    if is_admin:
+        builder.add(
+            InlineKeyboardButton(
+                text=str("Полностью удалить подключение"),
+                callback_data=UserActionData(
+                    action=UserAction.deletecon,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    connection_id=connection_id,
+                    absolute_delete=True,
+                    back_string=UserAction.conlist,
+                ).pack(),
+            )
+        )
     builder.add(
         InlineKeyboardButton(
             text=str("Назад"),
             callback_data=UserActionData(
-                action=UserAction.conlist, chat_id=chat_id, user_id=user_id
+                action=back_string, chat_id=chat_id, user_id=user_id
             ).pack(),
         )
     )

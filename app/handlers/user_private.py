@@ -23,24 +23,69 @@ logger = logging.getLogger(__name__)
 
 
 @router.message(or_f(Command("help"), CommandStart()))
-async def send_basic_actions(
-    message: types.Message,
+@router.callback_query(UserActionData.filter(F.action == UserAction.startbutton))
+async def start_callback_query(
+    event: types.Message | types.CallbackQuery,
     user: User | None,
 ) -> None:
     """
-    Handle the /start and /help commands and send the user a list of actions.
+    Обработка команд /start и /help, отправка пользователю списка доступных действий.
+
+    Args:
+        event: Входящее сообщение или callback query
+        user: Пользователь из базы данных (может быть None если не зарегистрирован)
     """
-    logger.info("User %s triggered /start or /help", message.chat.username)
-    await message.answer(
-        "Choose an action:",
-        reply_markup=get_user_actions_markup(
-            message.chat.username or "",
-            admins,
-            message.chat.id,
-            user_id=user.id if user else None,
-            is_admin=user.admin if user else False,
-        ),
+    if isinstance(event, types.CallbackQuery):
+        if not event.message:
+            await event.answer("Ошибка: сообщение недоступно")
+            return
+        chat = event.message.chat
+        await event.answer()
+    else:
+        chat = event.chat
+
+    logger.info("User %s triggered /start or /help", chat.username)
+
+    markup = get_user_actions_markup(
+        username=chat.username or "",
+        admins=admins,
+        chat_id=chat.id,
+        user_id=user.id if user else None,
+        is_admin=user.admin if user else False,
     )
+
+    if isinstance(event, types.CallbackQuery):
+        if event.message:
+            await event.message.answer(
+                text="Выберите действие:",
+                reply_markup=markup,
+            )
+    else:
+        await event.answer(
+            text="Выберите действие:",
+            reply_markup=markup,
+        )
+
+
+# @router.message(or_f(Command("help"), CommandStart()))
+# async def start_command(
+#     message: types.Message,
+#     user: User | None,
+# ) -> None:
+#     """
+#     Handle the /start and /help commands and send the user a list of actions.
+#     """
+#     logger.info("User %s triggered /start or /help", message.chat.username)
+#     await message.answer(
+#         "Choose an action:",
+#         reply_markup=get_user_actions_markup(
+#             message.chat.username or "",
+#             admins,
+#             message.chat.id,
+#             user_id=user.id if user else None,
+#             is_admin=user.admin if user else False,
+#         ),
+#     )
 
 
 @router.message(Command("op"))
@@ -119,6 +164,7 @@ async def get_connections(
             query.from_user.username,
         )
         return
+
     connections = await ConnectionRepository(session).get_by_user_id(
         user_id=user.id, show_deleted=user.admin
     )
@@ -126,15 +172,25 @@ async def get_connections(
         await query.answer("No connections found.")
         logger.info("No connections found for user %s", query.from_user.username)
         return
+
     await query.answer("We found your connections.")
     logger.info("Connections found for user %s", query.from_user.username)
 
-    await query.message.answer(  # type: ignore
-        "Ваши подключения:",
-        reply_markup=get_my_connections_markup(
-            query.from_user.id, user.id, connections
-        ),
-    )
+    if query.message:
+        back_string = (
+            UserAction.startbutton
+            if not callback_data.back_string
+            else UserAction(callback_data.back_string)
+        )
+        await query.message.answer(
+            "Ваши подключения:",
+            reply_markup=get_my_connections_markup(
+                query.from_user.id,
+                user.id,
+                connections,
+                back_string=back_string,
+            ),
+        )
 
 
 @router.callback_query(UserActionData.filter(F.action == UserAction.addcon))
@@ -144,71 +200,83 @@ async def add_connection(
     session: AsyncSession,
     user: User | None,
 ) -> None:
+    """
+    Создание нового подключения для пользователя.
+
+    Args:
+        query: Callback query от пользователя
+        callback_data: Данные из callback
+        session: Сессия базы данных
+        user: Текущий пользователь
+    """
     expiry_time_days = 3
     logger.info("User %s requested to add a connection", query.from_user.username)
+
     if not user:
-        await query.answer(
-            "You need to register first!",
-            reply_markup=get_user_actions_markup(
-                query.from_user.username or "",
-                admins,
-                query.from_user.id,
-                user_id=user.id if user else None,
-            ),
-        )
+        await query.answer("Сначала необходимо зарегистрироваться!")
         logger.warning(
-            "User %s tried to add a connection without registration",
-            query.from_user.username,
+            "Попытка создания подключения без регистрации: %s", query.from_user.username
         )
         return
-    api_client = get_async_client()
-    email = await api_client.add_connection(
-        query.from_user.username,  # type: ignore
-        query.from_user.id,
-        limit_ip=3,
-        expiry_time_days=expiry_time_days,
-    )
-    if not email:
-        await query.answer("Failed to create connection.")
-        logger.error(
-            "Failed to create connection for user %s", query.from_user.username
+
+    try:
+        api_client = get_async_client()
+        email = await api_client.add_connection(
+            query.from_user.username,  # type: ignore
+            query.from_user.id,
+            limit_ip=3,
+            expiry_time_days=expiry_time_days,
         )
-        return
-    inbound = await api_client.get_inbound()
-    if not inbound:
-        await query.answer("Inbound not found.")
-        logger.error("Inbound not found for user %s", query.from_user.username)
-        return
-    # Check existing connection
-    connection = await api_client.get_connection(inbound, email=email)
-    if connection is None:
-        await query.answer("Connection not found.")
-        logger.error("Connection not found for user %s", query.from_user.username)
-        return
-    connection_url = api_client.create_link(connection, inbound)
 
-    # Save connection to the database
-    await ConnectionRepository(session).create(
-        inbound=api_client.inbound_id,
-        email=email,
-        connection_url=connection_url,
-        created_at=datetime.datetime.now(datetime.UTC),
-        expired_at=datetime.datetime.now(datetime.UTC)
-        + datetime.timedelta(days=expiry_time_days),
-        uuid=connection.id,
-        user=user,
-        host="scvnotready.online",
-    )
+        if not email:
+            raise ValueError("Не удалось получить email для подключения")
 
-    logger.info("Connection created successfully for user %s", query.from_user.username)
-    await query.answer("Connection created successfully.")
-    await query.message.answer(  # type: ignore
-        "Connection created successfully.",
+        inbound = await api_client.get_inbound()
+        if not inbound:
+            raise ValueError("Не удалось получить inbound")
+
+        connection = await api_client.get_connection(inbound, email=email)
+        if not connection:
+            raise ValueError("Не удалось получить данные подключения")
+
+        connection_url = api_client.create_link(connection, inbound)
+
+        # Сохранение в базу данных
+        await ConnectionRepository(session).create(
+            inbound=api_client.inbound_id,
+            email=email,
+            connection_url=connection_url,
+            created_at=datetime.datetime.now(datetime.UTC),
+            expired_at=datetime.datetime.now(datetime.UTC)
+            + datetime.timedelta(days=expiry_time_days),
+            uuid=connection.id,
+            user=user,
+            host="scvnotready.online",
+        )
+
+        logger.info("Подключение успешно создано для %s", query.from_user.username)
+        await query.answer("✅ Подключение успешно создано")
+
+    except Exception as e:
+        error_msg = f"Ошибка при создании подключения: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        await query.answer("❌ Не удалось создать подключение")
+        return
+
+    if query.message is None:
+        await query.answer("❌ Ошибка: сообщение недоступно")
+        return
+
+    await query.message.answer(
+        "Подключение успешно создано.",
         reply_markup=get_user_actions_markup(
             query.from_user.username or "",
             admins,
             query.from_user.id,
             user_id=user.id,
+            back_string=UserAction(callback_data.back_string)
+            if callback_data.back_string
+            else None,
         ),
     )
 
@@ -220,42 +288,65 @@ async def view_connection(
     session: AsyncSession,
     user: User | None,
 ) -> None:
-    logger.info("User %s requested to view a connection", query.from_user.username)
+    """
+    Просмотр информации о подключении.
+
+    Args:
+        query: Callback query от пользователя
+        callback_data: Данные из callback
+        session: Сессия базы данных
+        user: Текущий пользователь
+    """
+    logger.info("Запрос на просмотр подключения от %s", query.from_user.username)
+
     if not user:
-        await query.answer("You need to register first!")
+        await query.answer("Сначала необходимо зарегистрироваться!")
         logger.warning(
-            "User %s tried to view a connection without registration",
+            "Попытка просмотра подключения без регистрации: %s",
             query.from_user.username,
         )
         return
+
     if not callback_data.connection_id:
-        logger.error(
-            "Connection ID not provided for user %s",
-            query.from_user.username,
-        )
-        await query.answer("❗️Connection ID not provided.")
+        await query.answer("❗️ Не указан ID подключения")
+        logger.error("ID подключения не предоставлен для %s", query.from_user.username)
         return
-    # Fetch connection from the database
+
     connection = await ConnectionRepository(session).get_by_id(
         callback_data.connection_id
     )
     if not connection:
-        await query.answer("❗️Connection not found.")
-        logger.error("Connection not found for user %s", query.from_user.username)
+        await query.answer("❗️ Подключение не найдено")
+        logger.error("Подключение не найдено для %s", query.from_user.username)
         return
-    await query.answer("✅ Connection found.")
-    logger.info("Connection found for user %s", query.from_user.username)
 
-    await query.message.answer(  # type: ignore
-        (
-            f"{connection.email} - {connection.connection_url}\n"
-            f"Created at: {connection.created_at}\n"
-            f"Expired at: {connection.expired_at}\n"
-        ),
-        reply_markup=get_view_connection_markup(
-            chat_id=query.from_user.id, user_id=user.id, connection_id=connection.id
-        ),
-    )
+    # Форматирование дат в местную временную зону
+    created_at = connection.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    expired_at = connection.expired_at.strftime("%Y-%m-%d %H:%M:%S")
+
+    await query.answer("✅ Подключение найдено")
+
+    if query.message:
+        back_string = (
+            UserAction.startbutton
+            if not callback_data.back_string
+            else UserAction(callback_data.back_string)
+        )
+        await query.message.answer(
+            f"📡 Данные подключения:\n\n"
+            f"Email: {connection.email}\n"
+            f"URL: <code>{connection.connection_url}</code>\n"
+            f"Создано: {created_at}\n"
+            f"Истекает: {expired_at}",
+            reply_markup=get_view_connection_markup(
+                chat_id=query.from_user.id,
+                user_id=user.id,
+                connection_id=connection.id,
+                back_string=back_string,
+                is_admin=user.admin,
+            ),
+            parse_mode="HTML",
+        )
 
 
 @router.callback_query(UserActionData.filter(F.action == UserAction.deletecon))
@@ -265,85 +356,105 @@ async def delete_connection(
     session: AsyncSession,
     user: User | None,
 ) -> None:
-    skip_api_delete: bool = False
-    logger.info("User %s requested to delete a connection", query.from_user.username)
+    """
+    Удаление подключения пользователя.
+
+    Args:
+        query: Callback query от пользователя
+        callback_data: Данные из callback
+        session: Сессия базы данных
+        user: Текущий пользователь
+    """
+    logger.info("Запрос на удаление подключения от %s", query.from_user.username)
+
     if not user:
-        await query.answer("You need to register first!")
+        await query.answer("Сначала необходимо зарегистрироваться!")
         logger.warning(
-            "User %s tried to delete a connection without registration",
-            query.from_user.username,
+            "Попытка удаления подключения без регистрации: %s", query.from_user.username
         )
         return
+
     if not callback_data.connection_id:
-        logger.error(
-            "Connection ID not provided for user %s",
-            query.from_user.username,
-        )
+        await query.answer("❗️ Не указан ID подключения")
+        logger.error("ID подключения не предоставлен для %s", query.from_user.username)
         return
-    connection = await ConnectionRepository(session).get_by_id(
-        callback_data.connection_id
-    )
-    if not connection:
-        # Logging the error
-        logger.error(
-            "Connection not found in the database for user %s",
-            query.from_user.username,
-        )
-        await query.answer("❗️Connection not found in the database.")
-        return
-    await query.answer("✅ Connection found.")
-    logger.info(
-        "Connection found in the database for user %s", query.from_user.username
-    )
 
-    api_client = get_async_client()
-    # Check existing connection
-    existing_connection = await api_client.get_connection(uuid=connection.uuid)
-    if not existing_connection:
-        logger.error(
-            "Connection not found in the API for user %s",
-            query.from_user.username,
+    try:
+        connection = await ConnectionRepository(session).get_by_id(
+            callback_data.connection_id
         )
-        await query.answer("❗️Connection not found in the API.")
-        skip_api_delete = True
-
-    # Delete connection from the API if it exists
-    if not skip_api_delete:
-        try:
-            await api_client.delete_connection(connection.uuid)
-        except Exception as e:
-            logger.error(
-                "Failed to delete connection from API for user %s: %s",
-                query.from_user.username,
-                e,
-            )
-            await query.answer("❗️Failed to delete connection from API.")
+        if not connection:
+            await query.answer("❗️ Подключение не найдено в базе данных")
+            logger.error("Подключение не найдено в БД для %s", query.from_user.username)
             return
 
-    # Delete connection from the database
-    await ConnectionRepository(session).update(connection, exists_in_api=False)
-    logger.info("Connection deleted successfully for user %s", query.from_user.username)
-    await query.answer("Connection deleted successfully.")
-    await query.message.answer(  # type: ignore
-        "Connection deleted successfully.",
-        reply_markup=get_user_actions_markup(
-            query.from_user.username or "",
-            admins,
-            query.from_user.id,
-            user_id=user.id,
-        ),
-    )
+        api_client = get_async_client()
+        existing_connection = await api_client.get_connection(uuid=connection.uuid)
 
+        if existing_connection:
+            try:
+                await api_client.delete_connection(connection.uuid)
+                logger.info(
+                    "Подключение успешно удалено из API для %s",
+                    query.from_user.username,
+                )
+            except Exception as e:
+                error_msg = f"Ошибка при удалении подключения из API: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                await query.answer("❗️ Ошибка при удалении подключения из API")
+                return
+        else:
+            logger.warning(
+                "Подключение не найдено в API для %s (uuid: %s)",
+                query.from_user.username,
+                connection.uuid,
+            )
 
-# @router.message(Command("settingup"))
-# async def send_setting_up_vpn_connection(message: Message) -> None:
-#     await message.answer("Скачать nekoray, nekobox: https://matsuridayo.github.io/")
-#     await message.answer_photo(photo=FSInputFile(path="img.png"), caption="")
+        # Удаление или обновление записи в БД
+        if callback_data.absolute_delete:
+            await ConnectionRepository(session).delete(connection)
+            logger.info(
+                "Подключение полностью удалено из БД для %s", query.from_user.username
+            )
+        else:
+            await ConnectionRepository(session).update(connection, exists_in_api=False)
+            logger.info(
+                "Подключение помечено как удаленное для %s", query.from_user.username
+            )
+
+        await query.answer("✅ Подключение успешно удалено")
+
+        if query.message:
+            back_string = (
+                UserAction.startbutton
+                if not callback_data.back_string
+                else UserAction(callback_data.back_string)
+            )
+            await query.message.answer(
+                "Подключение успешно удалено",
+                reply_markup=get_user_actions_markup(
+                    query.from_user.username or "",
+                    admins,
+                    query.from_user.id,
+                    user_id=user.id,
+                    back_string=back_string,
+                ),
+            )
+
+    except Exception as e:
+        error_msg = f"Неожиданная ошибка при удалении подключения: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        await query.answer("❌ Произошла ошибка при удалении подключения")
 
 
 @router.errors()
 async def handle_errors(event: types.ErrorEvent) -> None:
-    logger.critical("Critical error caused by %s", event.exception, exc_info=True)
+    """
+    Глобальный обработчик ошибок для роутера.
 
-
-# register_callback("register", lambda q: send_register(q.message))
+    Args:
+        event: Событие с ошибкой
+    """
+    logger.critical(
+        "Критическая ошибка в обработчике: %s", event.exception, exc_info=True
+    )
