@@ -1,6 +1,7 @@
 import logging
 from aiogram import F, Router, types
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import cast
 
 from app.db.models import User
 from app.db.repository import ConnectionRepository, UserRepository
@@ -25,6 +26,22 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+async def _check_message_accessible(query: types.CallbackQuery) -> types.Message | None:
+    """
+    Проверяет, доступно ли сообщение для обработки.
+
+    Args:
+        query: Callback query от пользователя
+
+    Returns:
+        Message | None: Объект Message если сообщение доступно, None в противном случае
+    """
+    if not query.message or isinstance(query.message, types.InaccessibleMessage):
+        await query.answer("❌ Ошибка: сообщение недоступно")
+        return None
+    return cast(types.Message, query.message)
+
+
 @router.callback_query(UserActionData.filter(F.action == UserAction.adminmarkup))
 async def send_admin_actions(
     query: types.CallbackQuery,
@@ -46,8 +63,15 @@ async def send_admin_actions(
             f"User {user.username} attempted to access admin actions without permission."
         )
         await query.answer("You are not authorized to perform this action.")
+        return
+
     await query.answer("Loading admin actions...")
-    await query.message.answer(  # type: ignore
+
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    await message.answer(
         f"Admin: {user.admin}",
         reply_markup=get_admin_actions_markup(query.from_user.id, user.id),
     )
@@ -84,7 +108,12 @@ async def send_user_list(
         return
 
     await query.answer("Loading user list...")
-    await query.message.answer(  # type: ignore
+
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    await message.answer(
         "User List:",
         reply_markup=get_admin_userlist_markup(
             query.from_user.id,
@@ -119,16 +148,25 @@ async def send_user_stat(
         await query.answer("You are not authorized to perform this action.")
         return
 
+    if not callback_data.user_id:
+        logger.warning(f"No user_id provided for connection list by {user.username}")
+        await query.answer("User ID not found.")
+        return
+
     user_connections = await ConnectionRepository(session).get_by_user_id(
-        callback_data.user_id
+        user_id=callback_data.user_id, show_deleted=True
     )
     if not user_connections:
         await query.answer("No connections found for this user.")
         return
 
-    # Return user connections
     await query.answer("Loading user connections...")
-    await query.message.answer(  # type: ignore
+
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    await message.answer(
         "User Connections:",
         reply_markup=get_admin_user_connections_markup(
             query.from_user.id,
@@ -171,6 +209,7 @@ async def send_user_connection_stat(
         return
 
     async_client = get_async_client()
+
     connection = await ConnectionRepository(session).get_by_id(
         callback_data.connection_id
     )
@@ -186,9 +225,13 @@ async def send_user_connection_stat(
         await query.answer("Client stats not found.")
         return
 
-    # Return user connections
     await query.answer("Loading user connection stats...")
-    await query.message.answer(  # type: ignore
+
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    await message.answer(
         (
             f"User {stats.email} Connection Stats:\n"
             f"Up: {stats.up}\n"

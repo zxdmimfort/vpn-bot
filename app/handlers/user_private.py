@@ -3,7 +3,7 @@ import datetime
 from aiogram import F, Router, types
 from aiogram.filters import Command, CommandStart, or_f
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from typing import cast
 
 from app.db.repository import ConnectionRepository, UserRepository
 from app.dependencies.auth import get_admins_list
@@ -22,28 +22,20 @@ admins: tuple[str, ...] = get_admins_list()
 logger = logging.getLogger(__name__)
 
 
-@router.message(or_f(Command("help"), CommandStart()))
-@router.callback_query(UserActionData.filter(F.action == UserAction.startbutton))
-async def start_callback_query(
-    event: types.Message | types.CallbackQuery,
+async def _handle_start_action(
+    chat: types.Chat,
     user: User | None,
-) -> None:
+) -> tuple[str, types.InlineKeyboardMarkup]:
     """
-    Обработка команд /start и /help, отправка пользователю списка доступных действий.
+    Общая логика для обработки команд start/help.
 
     Args:
-        event: Входящее сообщение или callback query
-        user: Пользователь из базы данных (может быть None если не зарегистрирован)
-    """
-    if isinstance(event, types.CallbackQuery):
-        if not event.message:
-            await event.answer("Ошибка: сообщение недоступно")
-            return
-        chat = event.message.chat
-        await event.answer()
-    else:
-        chat = event.chat
+        chat: Объект чата
+        user: Пользователь из базы данных
 
+    Returns:
+        tuple: Текст сообщения и клавиатура
+    """
     logger.info("User %s triggered /start or /help", chat.username)
 
     markup = get_user_actions_markup(
@@ -54,38 +46,60 @@ async def start_callback_query(
         is_admin=user.admin if user else False,
     )
 
-    if isinstance(event, types.CallbackQuery):
-        if event.message:
-            await event.message.answer(
-                text="Выберите действие:",
-                reply_markup=markup,
-            )
-    else:
-        await event.answer(
-            text="Выберите действие:",
-            reply_markup=markup,
-        )
+    return "Выберите действие:", markup
 
 
-# @router.message(or_f(Command("help"), CommandStart()))
-# async def start_command(
-#     message: types.Message,
-#     user: User | None,
-# ) -> None:
-#     """
-#     Handle the /start and /help commands and send the user a list of actions.
-#     """
-#     logger.info("User %s triggered /start or /help", message.chat.username)
-#     await message.answer(
-#         "Choose an action:",
-#         reply_markup=get_user_actions_markup(
-#             message.chat.username or "",
-#             admins,
-#             message.chat.id,
-#             user_id=user.id if user else None,
-#             is_admin=user.admin if user else False,
-#         ),
-#     )
+@router.message(or_f(Command("help"), CommandStart()))
+async def start_command(
+    message: types.Message,
+    user: User | None,
+) -> None:
+    """
+    Обработка команд /start и /help через сообщение.
+
+    Args:
+        message: Входящее сообщение
+        user: Пользователь из базы данных
+    """
+    text, markup = await _handle_start_action(message.chat, user)
+    await message.answer(text=text, reply_markup=markup)
+
+
+@router.callback_query(UserActionData.filter(F.action == UserAction.startbutton))
+async def start_callback(
+    query: types.CallbackQuery,
+    user: User | None,
+) -> None:
+    """
+    Обработка callback query для кнопки старт.
+
+    Args:
+        query: Callback query
+        user: Пользователь из базы данных
+    """
+    if not query.message:
+        await query.answer("Ошибка: сообщение недоступно")
+        return
+
+    await query.answer()
+    text, markup = await _handle_start_action(query.message.chat, user)
+    await query.message.answer(text=text, reply_markup=markup)
+
+
+async def _check_message_accessible(query: types.CallbackQuery) -> types.Message | None:
+    """
+    Проверяет, доступно ли сообщение для обработки.
+
+    Args:
+        query: Callback query от пользователя
+
+    Returns:
+        Message | None: Объект Message если сообщение доступно, None в противном случае
+    """
+    if not query.message or isinstance(query.message, types.InaccessibleMessage):
+        await query.answer("❌ Ошибка: сообщение недоступно")
+        return None
+    return cast(types.Message, query.message)
 
 
 @router.message(Command("op"))
@@ -137,8 +151,14 @@ async def send_register(
     else:
         text = "Вы уже прошли регистрацию!"
         logger.warning("User %s attempted to register again", query.from_user.username)
+
     await query.answer(text)
-    await query.message.answer(  # type: ignore
+
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    await message.answer(
         text,
         reply_markup=get_user_actions_markup(
             query.from_user.username or "",
@@ -176,21 +196,24 @@ async def get_connections(
     await query.answer("We found your connections.")
     logger.info("Connections found for user %s", query.from_user.username)
 
-    if query.message:
-        back_string = (
-            UserAction.startbutton
-            if not callback_data.back_string
-            else UserAction(callback_data.back_string)
-        )
-        await query.message.answer(
-            "Ваши подключения:",
-            reply_markup=get_my_connections_markup(
-                query.from_user.id,
-                user.id,
-                connections,
-                back_string=back_string,
-            ),
-        )
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    back_string = (
+        UserAction.startbutton
+        if not callback_data.back_string
+        else UserAction(callback_data.back_string)
+    )
+    await message.answer(
+        "Ваши подключения:",
+        reply_markup=get_my_connections_markup(
+            query.from_user.id,
+            user.id,
+            connections,
+            back_string=back_string,
+        ),
+    )
 
 
 @router.callback_query(UserActionData.filter(F.action == UserAction.addcon))
@@ -256,18 +279,17 @@ async def add_connection(
 
         logger.info("Подключение успешно создано для %s", query.from_user.username)
         await query.answer("✅ Подключение успешно создано")
-
     except Exception as e:
         error_msg = f"Ошибка при создании подключения: {str(e)}"
         logger.error(error_msg, exc_info=True)
         await query.answer("❌ Не удалось создать подключение")
         return
 
-    if query.message is None:
-        await query.answer("❌ Ошибка: сообщение недоступно")
+    message = await _check_message_accessible(query)
+    if message is None:
         return
 
-    await query.message.answer(
+    await message.answer(
         "Подключение успешно создано.",
         reply_markup=get_user_actions_markup(
             query.from_user.username or "",
@@ -326,27 +348,30 @@ async def view_connection(
 
     await query.answer("✅ Подключение найдено")
 
-    if query.message:
-        back_string = (
-            UserAction.startbutton
-            if not callback_data.back_string
-            else UserAction(callback_data.back_string)
-        )
-        await query.message.answer(
-            f"📡 Данные подключения:\n\n"
-            f"Email: {connection.email}\n"
-            f"URL: <code>{connection.connection_url}</code>\n"
-            f"Создано: {created_at}\n"
-            f"Истекает: {expired_at}",
-            reply_markup=get_view_connection_markup(
-                chat_id=query.from_user.id,
-                user_id=user.id,
-                connection_id=connection.id,
-                back_string=back_string,
-                is_admin=user.admin,
-            ),
-            parse_mode="HTML",
-        )
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    back_string = (
+        UserAction.startbutton
+        if not callback_data.back_string
+        else UserAction(callback_data.back_string)
+    )
+    await message.answer(
+        f"📡 Данные подключения:\n\n"
+        f"Email: {connection.email}\n"
+        f"URL: <code>{connection.connection_url}</code>\n"
+        f"Создано: {created_at}\n"
+        f"Истекает: {expired_at}",
+        reply_markup=get_view_connection_markup(
+            chat_id=query.from_user.id,
+            user_id=user.id,
+            connection_id=connection.id,
+            back_string=back_string,
+            is_admin=user.admin,
+        ),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(UserActionData.filter(F.action == UserAction.deletecon))
@@ -424,23 +449,25 @@ async def delete_connection(
 
         await query.answer("✅ Подключение успешно удалено")
 
-        if query.message:
-            back_string = (
-                UserAction.startbutton
-                if not callback_data.back_string
-                else UserAction(callback_data.back_string)
-            )
-            await query.message.answer(
-                "Подключение успешно удалено",
-                reply_markup=get_user_actions_markup(
-                    query.from_user.username or "",
-                    admins,
-                    query.from_user.id,
-                    user_id=user.id,
-                    back_string=back_string,
-                ),
-            )
+        message = await _check_message_accessible(query)
+        if message is None:
+            return
 
+        back_string = (
+            UserAction.startbutton
+            if not callback_data.back_string
+            else UserAction(callback_data.back_string)
+        )
+        await message.answer(
+            "Подключение успешно удалено",
+            reply_markup=get_user_actions_markup(
+                query.from_user.username or "",
+                admins,
+                query.from_user.id,
+                user_id=user.id,
+                back_string=back_string,
+            ),
+        )
     except Exception as e:
         error_msg = f"Неожиданная ошибка при удалении подключения: {str(e)}"
         logger.error(error_msg, exc_info=True)
