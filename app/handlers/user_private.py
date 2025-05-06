@@ -236,17 +236,28 @@ async def add_connection(
     logger.info("User %s requested to add a connection", query.from_user.username)
 
     if not user:
-        await query.answer("Сначала необходимо зарегистрироваться!")
+        await query.answer("Внутренняя ошибка")
         logger.warning(
             "Попытка создания подключения без регистрации: %s", query.from_user.username
+        )
+        return
+
+    username = user.username
+    if not username:
+        await query.answer(
+            "Для создания подключения необходимо указать username в Telegram"
+        )
+        logger.warning(
+            "Попытка создания подключения без username в Telegram: user_id=%s",
+            user.id,
         )
         return
 
     try:
         api_client = get_async_client()
         email = await api_client.add_connection(
-            query.from_user.username,  # type: ignore
-            query.from_user.id,
+            username=username,
+            tg_id=user.id,
             limit_ip=3,
             expiry_time_days=expiry_time_days,
         )

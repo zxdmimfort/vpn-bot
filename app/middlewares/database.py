@@ -36,12 +36,22 @@ class DataBaseSession(BaseMiddleware):
 class UserMiddleware(BaseMiddleware):
     async def __call__(
         self,
-        handler: Callable[[Update, dict[str, Any]], Awaitable[Any]],
-        event: Update,  # type: ignore
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any],
     ):
-        chat_id = event.event.from_user.id  # type: ignore
-        session = data["session"]
-        user = await UserRepository(session=session).get_by_chat_id(chat_id)
-        data["user"] = user
+        if (
+            isinstance(event, Update)
+            and event.event
+            and hasattr(event.event, "from_user")
+            and event.event.from_user
+        ):
+            chat_id = event.event.from_user.id
+            session = data["session"]
+            user = await UserRepository(session=session).get_by_chat_id(chat_id)
+            data["user"] = user
+        else:
+            logger.warning("Event is not an Update or user data is missing")
+            data["user"] = None
+
         return await handler(event, data)

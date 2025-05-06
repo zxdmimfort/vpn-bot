@@ -83,13 +83,16 @@ class APIClient:
             return response
 
     async def _request(self, method: str, url: str, **kwargs) -> dict:
-        request = self.session.get if method == "GET" else self.session.post  # type: ignore
+        if self.session is None:
+            raise RuntimeError("Session is not initialized")
+
+        request = self.session.get if method == "GET" else self.session.post
 
         async with request(url, **kwargs) as response:
             content_type = response.headers.get("Content-Type", "")
             # If the response status is 401 or returns HTML (expired cookies), refresh cookies.
             if response.status == 401 or "text" in content_type:
-                print(
+                logger.info(
                     "Cookies expired or received unexpected HTML, refreshing cookies."
                 )
                 await self.login()  # refresh cookies

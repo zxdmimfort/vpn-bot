@@ -20,7 +20,8 @@ class UserAction(str, Enum):
     startbutton = "startbutton"
 
 
-class UserActionData(CallbackData, prefix="user"):  # type: ignore
+@CallbackData.prefix("user")
+class UserActionData(CallbackData):
     """A callback data class for handling user-related actions.
 
     This class extends CallbackData and is used to structure callback data
@@ -203,7 +204,8 @@ class AdminAction(str, Enum):
     deleteuser = "deleteuser"
 
 
-class AdminActionData(CallbackData, prefix="admin"):  # type: ignore
+@CallbackData.prefix("admin")
+class AdminActionData(CallbackData):
     """A callback data class for handling admin-related actions.
 
     This class extends CallbackData and is used to structure callback data
@@ -213,6 +215,7 @@ class AdminActionData(CallbackData, prefix="admin"):  # type: ignore
         action (AdminAction): The type of action to be performed.
         chat_id (int): The ID of the chat where the action is taking place.
         user_id (int): The ID of the target user.
+        connection_id (int | None): The ID of the connection, if applicable.
     """
 
     action: AdminAction
