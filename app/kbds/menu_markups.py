@@ -20,20 +20,20 @@ class UserAction(str, Enum):
     startbutton = "startbutton"
 
 
-@CallbackData.prefix("user")
-class UserActionData(CallbackData):
-    """A callback data class for handling user-related actions.
+# Тут не получается избавиться от ошибки mypy
+class UserActionData(CallbackData, prefix="user"):  # type: ignore[call-arg]
+    """Класс данных обратного вызова для обработки действий пользователя.
 
-    This class extends CallbackData and is used to structure callback data
-    for user-related operations in the bot's menu system.
+    Этот класс расширяет CallbackData и используется для структурирования данных
+    обратного вызова для пользовательских операций в системе меню бота.
 
-    Attributes:
-        action (Action): The type of action to be performed.
-        chat_id (int): The ID of the chat where the action is taking place.
-        user_id (int | None): The ID of the target user, if applicable.
-        connection_id (int | None): The ID of the target connection, if applicable.
-        absolute_delete (bool): Flag to indicate if the connection should be deleted completely from database.
-        back_string (UserAction | None): The action to return to after the current action is completed.
+    Атрибуты:
+        action (Action): Тип выполняемого действия.
+        chat_id (int): ID чата, где происходит действие.
+        user_id (int | None): ID целевого пользователя, если применимо.
+        connection_id (int | None): ID подключения, если применимо.
+        absolute_delete (bool): Флаг, указывающий на полное удаление подключения из базы данных.
+        back_string (UserAction | None): Действие для возврата после завершения текущего действия.
     """
 
     action: UserAction
@@ -194,7 +194,7 @@ def get_view_connection_markup(
 
 
 class AdminAction(str, Enum):
-    """An enumeration of admin actions for the bot's menu system."""
+    """Перечисление действий администратора для системы меню бота."""
 
     userlist = "userlist"
     userconn = "userconn"
@@ -204,18 +204,18 @@ class AdminAction(str, Enum):
     deleteuser = "deleteuser"
 
 
-@CallbackData.prefix("admin")
-class AdminActionData(CallbackData):
-    """A callback data class for handling admin-related actions.
+# Тут не получается избавиться от ошибки mypy
+class AdminActionData(CallbackData, prefix="admin"):  # type: ignore[call-arg]
+    """Класс данных обратного вызова для обработки действий администратора.
 
-    This class extends CallbackData and is used to structure callback data
-    for admin-related operations in the bot's menu system.
+    Этот класс расширяет CallbackData и используется для структурирования данных
+    обратного вызова для операций администратора в системе меню бота.
 
-    Attributes:
-        action (AdminAction): The type of action to be performed.
-        chat_id (int): The ID of the chat where the action is taking place.
-        user_id (int): The ID of the target user.
-        connection_id (int | None): The ID of the connection, if applicable.
+    Атрибуты:
+        action (AdminAction): Тип выполняемого действия.
+        chat_id (int): ID чата, где происходит действие.
+        user_id (int): ID целевого пользователя.
+        connection_id (int | None): ID подключения, если применимо.
     """
 
     action: AdminAction

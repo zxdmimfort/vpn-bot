@@ -29,14 +29,14 @@ async def _handle_start_action(
     """
     Общая логика для обработки команд start/help.
 
-    Args:
+    Аргументы:
         chat: Объект чата
         user: Пользователь из базы данных
 
-    Returns:
-        tuple: Текст сообщения и клавиатура
+    Возвращает:
+        tuple: Текст сообщения и клавиатура для ответа
     """
-    logger.info("User %s triggered /start or /help", chat.username)
+    logger.info("Пользователь %s вызвал команду /start или /help", chat.username)
 
     markup = get_user_actions_markup(
         username=chat.username or "",

@@ -127,7 +127,7 @@ class APIClient:
             return None
         return inbound
 
-    async def get_clients_stats(self) -> dict[str, ClientStats]:
+    async def get_stats(self) -> dict[str, ClientStats]:
         """
         Get users stats from the inbound.
         """
