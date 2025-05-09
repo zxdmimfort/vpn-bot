@@ -11,9 +11,11 @@ from app.kbds.menu_markups import (
     AdminActionData,
     UserAction,
     UserActionData,
+    create_back_button,
     get_admin_actions_markup,
     get_admin_user_connections_markup,
     get_admin_userlist_markup,
+    get_view_connection_markup,
 )
 from app.login_client import get_async_client
 from app.schemas import ClientStats
@@ -71,6 +73,7 @@ async def send_admin_actions(
     if message is None:
         return
 
+    await query.answer()
     await message.answer(
         "Панель администратора:",
         reply_markup=get_admin_actions_markup(
@@ -118,6 +121,7 @@ async def send_users_list(
     if message is None:
         return
 
+    await query.answer()
     await message.answer(
         "Список пользователей:",
         reply_markup=get_admin_userlist_markup(
@@ -172,6 +176,7 @@ async def send_user_connections(
     if message is None:
         return
 
+    await query.answer()
     await message.answer(
         "Подключения пользователя:",
         reply_markup=get_admin_user_connections_markup(
@@ -225,41 +230,58 @@ async def send_connection_stats(
         logger.error("Подключение не найдено в БД")
         return
 
+    message = await _check_message_accessible(query)
+    if message is None:
+        return
+
+    back_button = create_back_button(
+        AdminActionData(
+            action=AdminAction.userconn,
+            chat_id=query.from_user.id,
+            user_id=user.id,
+        )
+    )
+    markup = get_view_connection_markup(
+        chat_id=query.from_user.id,
+        user_id=user.id,
+        connection_id=connection.id,
+        back_button=back_button,
+        is_admin=user.admin,
+    )
     try:
         api_client = get_async_client()
         api_connection = await api_client.get_connection(uuid=connection.uuid)
         if not api_connection:
             await query.answer("❗️ Подключение не найдено в API")
+            await message.answer("Подключение в API отсутствует", reply_markup=markup)
             logger.warning("Подключение не найдено в API (uuid: %s)", connection.uuid)
             return
 
         stats = await api_client.get_stats()
-        if not isinstance(stats, ClientStats):
+        con_stats = stats.get(connection.email)
+        if not isinstance(con_stats, ClientStats):
             await query.answer("❗️ Не удалось получить статистику")
             logger.error("Ошибка получения статистики из API")
             return
 
-        message = await _check_message_accessible(query)
-        if message is None:
-            return
+        await query.answer(
+            "✅ Статистика подключения получена",
+        )
 
         # Форматируем даты
         created_at = connection.created_at.strftime("%Y-%m-%d %H:%M:%S")
         expired_at = connection.expired_at.strftime("%Y-%m-%d %H:%M:%S")
 
+        # Отправляем сообщение с информацией о подключении
         await message.answer(
             f"📊 Статистика подключения:\n\n"
             f"Email: {connection.email}\n"
             f"Создано: {created_at}\n"
             f"Истекает: {expired_at}\n"
-            f"Всего загружено: {stats.down / 1024 / 1024:.2f} MB\n"
-            f"Всего отправлено: {stats.up / 1024 / 1024:.2f} MB\n"
-            f"Общий трафик: {(stats.up + stats.down) / 1024 / 1024:.2f} MB",
-            reply_markup=get_admin_user_connections_markup(
-                chat_id=query.from_user.id,
-                user_id=callback_data.user_id,
-                connections=[connection],
-            ),
+            f"Всего загружено: {con_stats.down / 1024 / 1024:.2f} MB\n"
+            f"Всего отправлено: {con_stats.up / 1024 / 1024:.2f} MB\n"
+            f"Общий трафик: {(con_stats.up + con_stats.down) / 1024 / 1024:.2f} MB",
+            reply_markup=markup,
         )
     except Exception as e:
         error_msg = f"Ошибка при получении статистики: {str(e)}"

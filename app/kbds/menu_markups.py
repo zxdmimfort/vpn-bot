@@ -41,156 +41,6 @@ class UserActionData(CallbackData, prefix="user"):  # type: ignore[call-arg]
     user_id: int | None = None
     connection_id: int | None = None
     absolute_delete: bool = False
-    back_string: UserAction | None = None
-
-
-def get_user_actions_markup(
-    username: str,
-    admins: Tuple[str, ...],
-    chat_id: int,
-    user_id: int | None,
-    is_admin: bool = False,
-    back_string: UserAction | None = None,
-) -> InlineKeyboardMarkup:
-    """Buttons for startbutton"""
-    builder = InlineKeyboardBuilder()
-    if user_id is None:
-        builder.add(
-            InlineKeyboardButton(
-                text=str("Регистрация"),
-                callback_data=UserActionData(
-                    action=UserAction.register,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    back_string=UserAction.startbutton,
-                ).pack(),
-            )
-        )
-    else:
-        builder.add(
-            InlineKeyboardButton(
-                text=str("Список моих подключений"),
-                callback_data=UserActionData(
-                    action=UserAction.conlist,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    back_string=UserAction.startbutton,
-                ).pack(),
-            ),
-            InlineKeyboardButton(
-                text=str("Добавить новое подключение"),
-                callback_data=UserActionData(
-                    action=UserAction.addcon,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    back_string=UserAction.startbutton,
-                ).pack(),
-            ),
-            InlineKeyboardButton(
-                text=str("Установка подключения"),
-                callback_data=UserActionData(
-                    action=UserAction.settingup,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    back_string=UserAction.startbutton,
-                ).pack(),
-            ),
-        )
-    if username in admins or is_admin:
-        builder.add(
-            InlineKeyboardButton(
-                text=str("Админка"),
-                callback_data=UserActionData(
-                    action=UserAction.adminmarkup,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    back_string=UserAction.startbutton,
-                ).pack(),
-            )
-        )
-
-    builder.adjust(2)
-    return builder.as_markup()
-
-
-def get_my_connections_markup(
-    chat_id: int,
-    user_id: int,
-    connections: Sequence[Connection],
-    back_string: UserAction,
-) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    for i, connection in enumerate(connections, 1):
-        builder.add(
-            InlineKeyboardButton(
-                text=f"{'❌' if not connection.exists_in_api else '✅'} {connection.email}",
-                callback_data=UserActionData(
-                    action=UserAction.viewcon,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    connection_id=connection.id,
-                    back_string=UserAction.conlist,
-                ).pack(),
-            )
-        )
-    builder.add(
-        InlineKeyboardButton(
-            text=str("Назад"),
-            callback_data=UserActionData(
-                action=back_string,
-                chat_id=chat_id,
-                user_id=user_id,
-            ).pack(),
-        )
-    )
-    builder.adjust(2)
-    return builder.as_markup()
-
-
-def get_view_connection_markup(
-    chat_id: int,
-    user_id: int,
-    connection_id: int,
-    back_string: UserAction,
-    is_admin: bool = False,
-) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.add(
-        InlineKeyboardButton(
-            text=str("Удалить подключение"),
-            callback_data=UserActionData(
-                action=UserAction.deletecon,
-                chat_id=chat_id,
-                user_id=user_id,
-                connection_id=connection_id,
-                back_string=UserAction.conlist,
-            ).pack(),
-        )
-    )
-    if is_admin:
-        builder.add(
-            InlineKeyboardButton(
-                text=str("Полностью удалить подключение"),
-                callback_data=UserActionData(
-                    action=UserAction.deletecon,
-                    chat_id=chat_id,
-                    user_id=user_id,
-                    connection_id=connection_id,
-                    absolute_delete=True,
-                    back_string=UserAction.conlist,
-                ).pack(),
-            )
-        )
-    builder.add(
-        InlineKeyboardButton(
-            text=str("Назад"),
-            callback_data=UserActionData(
-                action=back_string, chat_id=chat_id, user_id=user_id
-            ).pack(),
-        )
-    )
-    builder.adjust(2)
-    return builder.as_markup()
 
 
 class AdminAction(str, Enum):
@@ -222,6 +72,145 @@ class AdminActionData(CallbackData, prefix="admin"):  # type: ignore[call-arg]
     chat_id: int
     user_id: int
     connection_id: int | None = None
+
+
+def create_back_button(
+    callback_data: CallbackData,
+) -> InlineKeyboardButton:
+    """Создает кнопку "Назад" с заданными данными обратного вызова."""
+    button = InlineKeyboardButton(
+        text=str("Назад"),
+        callback_data=callback_data.pack(),
+    )
+    return button
+
+
+def get_user_actions_markup(
+    username: str,
+    admins: Tuple[str, ...],
+    chat_id: int,
+    user_id: int | None,
+    is_admin: bool = False,
+) -> InlineKeyboardMarkup:
+    """Buttons for startbutton"""
+    builder = InlineKeyboardBuilder()
+    if user_id is None:
+        builder.add(
+            InlineKeyboardButton(
+                text=str("Регистрация"),
+                callback_data=UserActionData(
+                    action=UserAction.register,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                ).pack(),
+            )
+        )
+    else:
+        builder.add(
+            InlineKeyboardButton(
+                text=str("Список моих подключений"),
+                callback_data=UserActionData(
+                    action=UserAction.conlist,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                ).pack(),
+            ),
+            InlineKeyboardButton(
+                text=str("Добавить новое подключение"),
+                callback_data=UserActionData(
+                    action=UserAction.addcon,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                ).pack(),
+            ),
+            InlineKeyboardButton(
+                text=str("Установка подключения"),
+                callback_data=UserActionData(
+                    action=UserAction.settingup,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                ).pack(),
+            ),
+        )
+    if username in admins or is_admin:
+        builder.add(
+            InlineKeyboardButton(
+                text=str("Админка"),
+                callback_data=UserActionData(
+                    action=UserAction.adminmarkup,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    back_string=UserAction.startbutton,
+                ).pack(),
+            )
+        )
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_my_connections_markup(
+    chat_id: int,
+    user_id: int,
+    connections: Sequence[Connection],
+    back_button: InlineKeyboardButton,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for i, connection in enumerate(connections, 1):
+        builder.add(
+            InlineKeyboardButton(
+                text=f"{'❌' if not connection.exists_in_api else '✅'} {connection.email}",
+                callback_data=UserActionData(
+                    action=UserAction.viewcon,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    connection_id=connection.id,
+                    back_string=UserAction.conlist,
+                ).pack(),
+            )
+        )
+    builder.add(back_button)
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_view_connection_markup(
+    chat_id: int,
+    user_id: int,
+    connection_id: int,
+    back_button: InlineKeyboardMarkup,
+    is_admin: bool = False,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text=str("Удалить подключение"),
+            callback_data=UserActionData(
+                action=UserAction.deletecon,
+                chat_id=chat_id,
+                user_id=user_id,
+                connection_id=connection_id,
+                back_string=UserAction.conlist,
+            ).pack(),
+        )
+    )
+    if is_admin:
+        builder.add(
+            InlineKeyboardButton(
+                text=str("Полностью удалить подключение"),
+                callback_data=UserActionData(
+                    action=UserAction.deletecon,
+                    chat_id=chat_id,
+                    user_id=user_id,
+                    connection_id=connection_id,
+                    absolute_delete=True,
+                    back_string=UserAction.conlist,
+                ).pack(),
+            )
+        )
+    builder.add(back_button)
+    builder.adjust(2)
+    return builder.as_markup()
 
 
 def get_admin_actions_markup(
@@ -286,7 +275,7 @@ def get_admin_user_connections_markup(
     for i, connection in enumerate(connections, 1):
         builder.add(
             InlineKeyboardButton(
-                text=f"{connection.email}",
+                text=f"{'❌' if not connection.exists_in_api else '✅'} {connection.email}",
                 callback_data=AdminActionData(
                     action=AdminAction.connstat,
                     chat_id=chat_id,

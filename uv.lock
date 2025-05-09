@@ -3,6 +3,21 @@ revision = 1
 requires-python = ">=3.12"
 
 [[package]]
+name = "advanced-alchemy"
+version = "1.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "alembic" },
+    { name = "greenlet" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/9a/ed0d8f046a6e3260dda850c55a633a62800df08bd121bd9bff4c29b85014/advanced_alchemy-1.4.2.tar.gz", hash = "sha256:ec83684aba990256c36b4fb38de7772d62ead9fadc26868d92e72cdb4ecbf008", size = 688850 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/09/65ecb77c87d85d1c6e238bd4c65490073c43fc2eb3a6439717c2dfc03d4c/advanced_alchemy-1.4.2-py3-none-any.whl", hash = "sha256:1fc9eda944b6e7f908b932e61b38b7b280400a39a23d62519ba89cecd0a52097", size = 227193 },
+]
+
+[[package]]
 name = "aiofiles"
 version = "24.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -868,6 +883,7 @@ name = "tbot"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "advanced-alchemy" },
     { name = "aiogram" },
     { name = "aiosqlite" },
     { name = "alembic" },
@@ -886,6 +902,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "advanced-alchemy", specifier = ">=1.4.2" },
     { name = "aiogram", specifier = ">=3.20.0" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "alembic", specifier = ">=1.15.2" },

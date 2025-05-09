@@ -12,6 +12,7 @@ def main() -> None:
     locals_dict = globals().copy()
     session_maker = get_session_maker()
     session: AsyncSession = session_maker()
+    api = get_async_client()
     locals_dict.update(
         {
             "session": session,
@@ -19,7 +20,7 @@ def main() -> None:
             "User": User,
             "Connection": Connection,
             "select": select,
-            "api": get_async_client(),
+            "api": api,
         }
     )
     print("Welcome to the interactive shell!")
